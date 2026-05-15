@@ -1,9 +1,15 @@
 from logging.config import fileConfig
+
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from dotenv import load_dotenv
 from alembic import context
 import os
-from dotenv import load_dotenv
+import sys
+from os.path import abspath, dirname, join
+
+sys.path.insert(0, abspath(join(dirname(__file__), '..', 'src')))
+
 from models.base import Base
 
 load_dotenv()

@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 class Category(Base):
-    __tablename__ = 'category'
+    __tablename__ = 'categories'
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str] = mapped_column()
     location: Mapped[str] = mapped_column()
