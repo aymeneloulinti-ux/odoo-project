@@ -121,7 +121,7 @@ class StockStats:
         """Get full movement history."""
         movements = (
             self.db.query(StockMovement)
-            .order_by(StockMovement.id.desc())
+            .order_by(StockMovement.id.asc())
             .all()
         )
         
@@ -141,7 +141,7 @@ class StockStats:
         
         return result
 
-    def get_movement_history_page(self, page: int = 1, limit: int = 20):
+    def get_movement_history_page(self, page: int = 1, limit: int = 10):
         """Get paged movement history."""
         total_movements = self.db.query(func.count(StockMovement.id)).scalar() or 0
         total_pages = max((total_movements + limit - 1) // limit, 1)
@@ -150,7 +150,7 @@ class StockStats:
 
         movements = (
             self.db.query(StockMovement)
-            .order_by(StockMovement.id.desc())
+            .order_by(StockMovement.id.asc())
             .offset(offset)
             .limit(limit)
             .all()
@@ -468,6 +468,217 @@ class StockStats:
         }
 
 
+class ProductStats:
+    """Helper class to compute product statistics and KPIs."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def get_all_products_with_stock(self):
+        """Get all products with their current stock level."""
+        products = self.db.query(Product).all()
+        result = []
+        
+        for product in products:
+            net_quantity = (
+                self.db.query(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (StockMovement.type == "IN", StockMovement.quantity),
+                                (StockMovement.type == "OUT", -StockMovement.quantity),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    )
+                )
+                .filter(StockMovement.product_id == product.id)
+                .scalar() or 0
+            )
+            net_quantity = max(int(net_quantity), 0)
+            
+            result.append({
+                "id": product.id,
+                "name": product.name,
+                "unit_price": float(product.unit_price),
+                "category_id": product.category_id,
+                "category_name": product.category.name if product.category else "Unknown",
+                "stock_level": net_quantity,
+            })
+        
+        return result
+    
+    def get_low_stock_products(self, threshold: int = 10):
+        """Get products with stock below threshold."""
+        products = self.db.query(Product).all()
+        result = []
+        
+        for product in products:
+            net_quantity = (
+                self.db.query(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (StockMovement.type == "IN", StockMovement.quantity),
+                                (StockMovement.type == "OUT", -StockMovement.quantity),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    )
+                )
+                .filter(StockMovement.product_id == product.id)
+                .scalar() or 0
+            )
+            net_quantity = max(int(net_quantity), 0)
+            
+            if net_quantity < threshold:
+                result.append({
+                    "id": product.id,
+                    "name": product.name,
+                    "unit_price": float(product.unit_price),
+                    "category_name": product.category.name if product.category else "Unknown",
+                    "stock_level": net_quantity,
+                })
+        
+        return result
+    
+    def get_best_seller(self):
+        """Get the best-selling product (by quantity OUT)."""
+        result = (
+            self.db.query(
+                Product.id,
+                Product.name,
+                Product.unit_price,
+                func.sum(StockMovement.quantity).label("total_sold"),
+                func.sum(StockMovement.quantity * StockMovement.price).label("revenue"),
+            )
+            .join(StockMovement, StockMovement.product_id == Product.id)
+            .filter(StockMovement.type == "OUT")
+            .group_by(Product.id, Product.name, Product.unit_price)
+            .order_by(func.sum(StockMovement.quantity).desc())
+            .first()
+        )
+        
+        if result:
+            return {
+                "id": result.id,
+                "name": result.name,
+                "unit_price": float(result.unit_price),
+                "total_sold": int(result.total_sold or 0),
+                "revenue": float(result.revenue or 0),
+            }
+        return None
+    
+    def get_most_profitable_product(self):
+        """Get the most profitable product (by profit/revenue)."""
+        result = (
+            self.db.query(
+                Product.id,
+                Product.name,
+                Product.unit_price,
+                func.sum(
+                    case(
+                        (StockMovement.type == "OUT", StockMovement.quantity * StockMovement.price),
+                        else_=0,
+                    )
+                ).label("revenue"),
+                func.sum(
+                    case(
+                        (StockMovement.type == "IN", StockMovement.quantity * StockMovement.price),
+                        else_=0,
+                    )
+                ).label("cost"),
+            )
+            .join(StockMovement, StockMovement.product_id == Product.id)
+            .group_by(Product.id, Product.name, Product.unit_price)
+            .all()
+        )
+        
+        if not result:
+            return None
+        
+        best = max(
+            result,
+            key=lambda r: (float(r.revenue or 0) - float(r.cost or 0)),
+        )
+        
+        return {
+            "id": best.id,
+            "name": best.name,
+            "unit_price": float(best.unit_price),
+            "revenue": float(best.revenue or 0),
+            "cost": float(best.cost or 0),
+            "profit": float((best.revenue or 0) - (best.cost or 0)),
+        }
+    
+    def get_least_selling_product(self):
+        """Get the least-selling product (by quantity OUT)."""
+        all_products = self.db.query(Product).all()
+        
+        product_sales = {}
+        for product in all_products:
+            sold = (
+                self.db.query(func.sum(StockMovement.quantity))
+                .filter(
+                    StockMovement.product_id == product.id,
+                    StockMovement.type == "OUT",
+                )
+                .scalar() or 0
+            )
+            product_sales[product.id] = {
+                "id": product.id,
+                "name": product.name,
+                "unit_price": float(product.unit_price),
+                "total_sold": int(sold),
+            }
+        
+        if not product_sales:
+            return None
+        
+        least = min(product_sales.values(), key=lambda p: p["total_sold"])
+        return least
+    
+    def search_products(self, query: str):
+        """Search products by name (case-insensitive)."""
+        products = (
+            self.db.query(Product)
+            .filter(Product.name.ilike(f"%{query}%"))
+            .all()
+        )
+        
+        result = []
+        for product in products:
+            net_quantity = (
+                self.db.query(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (StockMovement.type == "IN", StockMovement.quantity),
+                                (StockMovement.type == "OUT", -StockMovement.quantity),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    )
+                )
+                .filter(StockMovement.product_id == product.id)
+                .scalar() or 0
+            )
+            net_quantity = max(int(net_quantity), 0)
+            
+            result.append({
+                "id": product.id,
+                "name": product.name,
+                "unit_price": float(product.unit_price),
+                "category_name": product.category.name if product.category else "Unknown",
+                "stock_level": net_quantity,
+            })
+        
+        return result
+
+
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     """Render login page."""
@@ -586,9 +797,116 @@ def stock_page(request: Request, page: int = Query(1, ge=1), db: Session = Depen
     )
 
 
+@router.get("/stock/history", response_class=HTMLResponse)
+def stock_history_fragment(request: Request, page: int = Query(1, ge=1), db: Session = Depends(get_session)):
+    """Return rendered movement history fragment for partial pagination updates."""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    username = decode_access_token(token)
+    if not username:
+        return RedirectResponse(url="/login", status_code=302)
+
+    user = db.query(User).filter(User.username == username, User.is_active == True).first()
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    stats = StockStats(db)
+    movement_info = stats.get_movement_history_page(page)
+
+    return render_template(
+        request,
+        "partials/stock_movement_history.html",
+        {
+            "user": user,
+            "movement_history": movement_info["items"],
+            "movement_page": movement_info["page"],
+            "movement_pages": movement_info["pages"],
+            "movement_limit": movement_info["limit"],
+            "movement_total": movement_info["total"],
+        },
+    )
+
+
 @router.get("/logout", response_class=RedirectResponse)
 def logout():
     """Logout user by clearing session cookie."""
     response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie("access_token")
     return response
+
+
+@router.get("/products", response_class=HTMLResponse)
+def products_page(request: Request, db: Session = Depends(get_session)):
+    """Render products page."""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    username = decode_access_token(token)
+    if not username:
+        return RedirectResponse(url="/login", status_code=302)
+
+    user = db.query(User).filter(User.username == username, User.is_active == True).first()
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    if not (user.role and user.has_permission("read_product")):
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    stats = ProductStats(db)
+    all_products = stats.get_all_products_with_stock()
+    low_stock_products = stats.get_low_stock_products()
+    best_seller = stats.get_best_seller()
+    most_profitable = stats.get_most_profitable_product()
+    least_seller = stats.get_least_selling_product()
+
+    return render_template(
+        request,
+        "products.html",
+        {
+            "user": user,
+            "all_products": all_products,
+            "low_stock_products": low_stock_products,
+            "best_seller": best_seller,
+            "most_profitable": most_profitable,
+            "least_seller": least_seller,
+            "current_date": date.today().strftime("%d/%m/%Y"),
+            "can_read_product": user.role and user.has_permission("read_product"),
+            "can_write_product": user.role and user.has_permission("write_product"),
+        },
+    )
+
+
+@router.get("/products/search", response_class=HTMLResponse)
+def products_search(request: Request, q: str = Query(""), db: Session = Depends(get_session)):
+    """Search products by name."""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/login", status_code=302)
+
+    username = decode_access_token(token)
+    if not username:
+        return RedirectResponse(url="/login", status_code=302)
+
+    user = db.query(User).filter(User.username == username, User.is_active == True).first()
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    if not (user.role and user.has_permission("read_product")):
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    stats = ProductStats(db)
+    search_results = stats.search_products(q) if q else []
+
+    return render_template(
+        request,
+        "partials/product_search_results.html",
+        {
+            "user": user,
+            "products": search_results,
+            "search_query": q,
+            "can_write_product": user.role and user.has_permission("write_product"),
+        },
+    )

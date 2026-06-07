@@ -1,9 +1,10 @@
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
 from models.product import Product
 from models.category import Category
+from models.stock_movement import StockMovement
 
 
 def list_products(db: Session) -> list[Product]:
@@ -53,6 +54,19 @@ def update_product(product_id: int, payload, db: Session) -> Product:
 
 def delete_product(product_id: int, db: Session) -> None:
     prod = get_product(product_id, db)
+
+    movement_count = db.execute(
+        select(func.count())
+        .select_from(StockMovement)
+        .filter(StockMovement.product_id == product_id)
+    ).scalar() or 0
+
+    if movement_count:
+        raise HTTPException(
+            status_code=400,
+            detail="Impossible de supprimer un produit qui possède des ventes ou des mouvements de stock enregistrés.",
+        )
+
     db.delete(prod)
     db.commit()
     return None

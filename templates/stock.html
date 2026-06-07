@@ -98,55 +98,9 @@
 
         <div class="section">
             <h2>Historique des mouvements</h2>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Produit</th>
-                        <th>Type</th>
-                        <th>Quantité</th>
-                        <th>Prix unitaire</th>
-                        <th>Montant</th>
-                        <th>Entrepôt</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if movement_history %}
-                        {% for movement in movement_history %}
-                        <tr>
-                            <td>{{ movement.product_name }}</td>
-                            <td>
-                                <span class="badge {% if movement.movement_type == 'IN' %}badge-info{% else %}badge-warning{% endif %}">
-                                    {{ movement.movement_type }}
-                                </span>
-                            </td>
-                            <td>{{ movement.quantity }}</td>
-                            <td>€{{ movement.price | round(2) }}</td>
-                            <td>€{{ movement.total_amount | round(2) }}</td>
-                            <td>{{ movement.warehouse_name }}</td>
-                            <td>{{ movement.created_at.strftime('%d/%m/%Y %H:%M') if movement.created_at else 'N/A' }}</td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center">Aucun mouvement dans l'historique</td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="pagination">
-            {% if movement_pages > 1 %}
-            <div class="pagination-controls">
-                <a href="?page={{ movement_page - 1 }}" class="page-link{% if movement_page <= 1 %} disabled{% endif %}">Précédent</a>
-                {% for p in range(1, movement_pages + 1) %}
-                <a href="?page={{ p }}" class="page-link{% if movement_page == p %} active{% endif %}">{{ p }}</a>
-                {% endfor %}
-                <a href="?page={{ movement_page + 1 }}" class="page-link{% if movement_page >= movement_pages %} disabled{% endif %}">Suivant</a>
+            <div id="movement-history-container">
+                {% include 'partials/stock_movement_history.html' %}
             </div>
-            <div class="page-info">Page {{ movement_page }} sur {{ movement_pages }} - {{ movement_total }} mouvements</div>
-            {% endif %}
         </div>
 
         <div class="section chart-section">
@@ -278,6 +232,50 @@
                 },
             },
         },
+    });
+
+    function attachMovementHistoryPagination() {
+        const container = document.getElementById('movement-history-container');
+        if (!container) {
+            return;
+        }
+
+        const links = container.querySelectorAll('.pagination-controls a.page-link');
+        links.forEach((link) => {
+            link.addEventListener('click', (event) => {
+                if (link.classList.contains('disabled') || link.classList.contains('active')) {
+                    event.preventDefault();
+                    return;
+                }
+
+                event.preventDefault();
+                const url = new URL(link.href, window.location.origin);
+                const nextPage = url.searchParams.get('page') || '1';
+                loadMovementHistory(parseInt(nextPage, 10));
+            });
+        });
+    }
+
+    async function loadMovementHistory(page) {
+        const response = await fetch(`/stock/history?page=${page}`);
+        if (!response.ok) {
+            console.error('Erreur lors du chargement de l’historique de mouvements');
+            return;
+        }
+
+        const html = await response.text();
+        const container = document.getElementById('movement-history-container');
+        if (!container) {
+            return;
+        }
+
+        container.innerHTML = html;
+        attachMovementHistoryPagination();
+        window.history.pushState({}, '', `?page=${page}`);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        attachMovementHistoryPagination();
     });
 </script>
 {% endblock %}

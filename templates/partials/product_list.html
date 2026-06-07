@@ -1,0 +1,38 @@
+<table class="table">
+    <thead>
+        <tr>
+            <th>Produit</th>
+            <th>Catégorie</th>
+            <th>Prix unitaire</th>
+            <th>Stock actuel</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if all_products %}
+            {% for product in all_products %}
+            <tr {% if can_write_product %}onclick="editProduct({{ product.id }})" class="clickable-row"{% endif %}>
+                <td><strong>{{ product.name }}</strong></td>
+                <td>{{ product.category_name }}</td>
+                <td>€{{ product.unit_price | round(2) }}</td>
+                <td>
+                    {% if product.stock_level < 10 %}
+                    <span class="badge badge-warning">{{ product.stock_level }}</span>
+                    {% else %}
+                    <span class="badge badge-success">{{ product.stock_level }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if can_write_product %}
+                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); editProduct({{ product.id }})">Modifier</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+        <tr>
+            <td colspan="5" class="text-center">Aucun produit disponible</td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>
