@@ -11,6 +11,7 @@ from models.base import Base
 if TYPE_CHECKING:
     from models.product import Product
     from models.warehouse import Warehouse
+    from models.user import User
 
 
 class MovementType(Enum):
@@ -38,6 +39,8 @@ class StockMovement(Base):
     warehouse_id: Mapped[int] = mapped_column(
         ForeignKey("warehouses.id")
     )
+    
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
     quantity: Mapped[int] = mapped_column()
 
@@ -51,12 +54,14 @@ class StockMovement(Base):
 
     reason: Mapped[str] = mapped_column(nullable=True)
 
-    product: Mapped["Product"] = relationship(
+    product: Mapped[Product] = relationship(
         "Product",
         back_populates="stock_movements"
     )
 
-    warehouse: Mapped["Warehouse"] = relationship(
+    warehouse: Mapped[Warehouse] = relationship(
         "Warehouse",
         back_populates="stock_movements"
     )
+    
+    user: Mapped[User] = relationship("User", back_populates="stock_movements")
