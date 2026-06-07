@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Mini ERP{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-brand">Mini ERP</div>
+        <ul class="navbar-menu">
+            <li><a href="/dashboard" class="active">Tableau de bord</a></li>
+            {% if user.role and user.has_permission('read_product') %}
+            <li><a href="/products">Produits</a></li>
+            {% endif %}
+            {% if user.role and user.has_permission('manage_users') %}
+            <li><a href="/users">Utilisateurs</a></li>
+            {% endif %}
+            {% if user.role and user.has_permission('manage_stock') %}
+            <li><a href="/stock">Stock</a></li>
+            {% endif %}
+        </ul>
+        <div class="navbar-end">
+            <a href="/logout" class="logout-btn">Déconnexion</a>
+            <div class="user-info">
+                <span>{{ user.username }}</span>
+                <span class="user-role">{{ user.role.role_name.value if user.role else 'N/A' }}</span>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <div class="container">
+        <div class="header">
+            <h1>Tableau de bord</h1>
+            <p class="date">{{ current_date }}</p>
+        </div>
+        
+        <!-- Toggle for KPI view -->
+        <div class="toggle-toolbar">
+            <div class="toggle-group">
+                <button id="showAnnual" class="btn-toggle active">A</button>
+                <button id="showMonthly" class="btn-toggle">M</button>
+            </div>
+            
+        </div>
+
+        <!-- Annual Financial KPIs -->
+        <div id="annualKpis" class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-value">€{{ finance_summary.total_revenue | round(2) }}</div>
+                <div class="kpi-label">CA</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">€{{ finance_summary.total_cost | round(2) }}</div>
+                <div class="kpi-label">Coût</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">€{{ finance_summary.total_profit | round(2) }}</div>
+
+                <div class="kpi-label">Bénéfice</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ finance_summary.gross_margin }}%</div>
+                <div class="kpi-label">Rentabilité</div>
+            </div>
+        </div>
+
+        <!-- Monthly Financial KPIs -->
+        <div id="monthlyKpis" class="kpi-grid" style="display:none;">
+            <div class="kpi-card">
+                <div class="kpi-value">€{{ current_month_summary.total_revenue | round(2) }}</div>
+                <div class="kpi-label">CA</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">€{{ current_month_summary.total_cost | round(2) }}</div>
+                <div class="kpi-label">Coût</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">€{{ current_month_summary.total_profit | round(2) }}</div>
+                <div class="kpi-label">Bénéfice</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ current_month_summary.gross_margin }}%</div>
+                <div class="kpi-label">Marge</div>
+            </div>
+        </div>
+
+        <div class="section chart-section">
+            <h2>Performance financière</h2>
+            <div class="chart-grid-large">
+                <div class="chart-card-large">
+                    <h3 id="trendTitle">Tendance mensuelle</h3>
+                    <canvas id="monthlyTrendChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid-small">
+                <div class="chart-card-small">
+                    <h3 id="revenueCostTitle">CA vs Coût</h3>
+                    <canvas id="revenueCostChart"></canvas>
+                </div>
+                <div class="chart-card-small">
+                    <h3 id="movementTypeTitle">Mouvements par type</h3>
+                    <canvas id="movementTypeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const monthlyTrend = {{ monthly_trend | tojson | safe }};
+    const annualTrend = monthlyTrend;
+    const dailyTrend = {{ daily_trend | tojson | safe }};
+    const annualRevenueChart = {{ revenue_chart | tojson | safe }};
+    const monthlyRevenueChart = {{ monthly_revenue_chart | tojson | safe }};
+    const annualMovementBreakdown = {{ movement_breakdown | tojson | safe }};
+    const monthlyMovementBreakdown = {{ monthly_movement_breakdown | tojson | safe }};
+
+    const monthlyTrendCtx = document.getElementById('monthlyTrendChart').getContext('2d');
+    const trendChart = new Chart(monthlyTrendCtx, {
+        type: 'line',
+        data: {
+            labels: annualTrend.labels,
+            datasets: [
+                {
+                    label: 'CA',
+                    data: annualTrend.revenue,
+                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                    borderColor: '#22c55e',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                },
+                {
+                    label: 'Coût',
+                    data: monthlyTrend.cost,
+                    backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                    borderColor: '#f97316',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                },
+                {
+                    label: 'Profit',
+                    data: monthlyTrend.profit,
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        padding: 12,
+                        font: { size: 13, weight: '500' },
+                    },
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: value => '€' + value },
+                    grid: { color: '#f1f5f9' },
+                },
+                x: {
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+
+    const revenueCtx = document.getElementById('revenueCostChart').getContext('2d');
+    const revenueChartObj = new Chart(revenueCtx, {
+        type: 'bar',
+        data: {
+            labels: annualRevenueChart.labels,
+            datasets: [{
+                label: 'Valeur (€)',
+                data: annualRevenueChart.values,
+                backgroundColor: ['#22c55e', '#f97316'],
+                borderColor: ['#15803d', '#c2410c'],
+                borderWidth: 1,
+                borderRadius: 6,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: value => '€' + value },
+                    grid: { color: '#f1f5f9' },
+                },
+                x: {
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+
+    const movementTypeCtx = document.getElementById('movementTypeChart').getContext('2d');
+    const movementTypeChartObj = new Chart(movementTypeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: annualMovementBreakdown.labels,
+            datasets: [{
+                data: annualMovementBreakdown.counts,
+                backgroundColor: ['#0ea5e9', '#f97316'],
+                borderColor: ['#dbeafe', '#fee2e2'],
+                borderWidth: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 16,
+                        font: { size: 14, weight: '500' },
+                        usePointStyle: true,
+                    },
+                },
+            },
+        },
+    });
+
+    // KPI Toggle logic
+    const annualBtn = document.getElementById('showAnnual');
+    const monthlyBtn = document.getElementById('showMonthly');
+    const annualKpis = document.getElementById('annualKpis');
+    const monthlyKpis = document.getElementById('monthlyKpis');
+
+    const trendTitle = document.getElementById('trendTitle');
+    const revenueCostTitle = document.getElementById('revenueCostTitle');
+    const movementTypeTitle = document.getElementById('movementTypeTitle');
+
+    function updateCharts(showAnnual) {
+        if (showAnnual) {
+            trendChart.data.labels = annualTrend.labels;
+            trendChart.data.datasets[0].data = annualTrend.revenue;
+            trendChart.data.datasets[1].data = annualTrend.cost;
+            trendChart.data.datasets[2].data = annualTrend.profit;
+            revenueChartObj.data.labels = annualRevenueChart.labels;
+            revenueChartObj.data.datasets[0].data = annualRevenueChart.values;
+            movementTypeChartObj.data.labels = annualMovementBreakdown.labels;
+            movementTypeChartObj.data.datasets[0].data = annualMovementBreakdown.counts;
+            trendTitle.textContent = 'Tendance mensuelle';
+            revenueCostTitle.textContent = 'CA vs Coût';
+            movementTypeTitle.textContent = 'Mouvements par type';
+        } else {
+            trendChart.data.labels = dailyTrend.labels;
+            trendChart.data.datasets[0].data = dailyTrend.revenue;
+            trendChart.data.datasets[1].data = dailyTrend.cost;
+            trendChart.data.datasets[2].data = dailyTrend.profit;
+            revenueChartObj.data.labels = monthlyRevenueChart.labels;
+            revenueChartObj.data.datasets[0].data = monthlyRevenueChart.values;
+            movementTypeChartObj.data.labels = monthlyMovementBreakdown.labels;
+            movementTypeChartObj.data.datasets[0].data = monthlyMovementBreakdown.counts;
+            trendTitle.textContent = 'Tendance quotidienne';
+            revenueCostTitle.textContent = 'CA vs Coût mensuel';
+            movementTypeTitle.textContent = 'Mouvements par type mensuel';
+        }
+
+        trendChart.update();
+        revenueChartObj.update();
+        movementTypeChartObj.update();
+    }
+
+    function setActive(showAnnual) {
+        if (showAnnual) {
+            annualKpis.style.display = '';
+            monthlyKpis.style.display = 'none';
+            annualBtn.classList.add('active');
+            monthlyBtn.classList.remove('active');
+        } else {
+            annualKpis.style.display = 'none';
+            monthlyKpis.style.display = '';
+            annualBtn.classList.remove('active');
+            monthlyBtn.classList.add('active');
+        }
+        updateCharts(showAnnual);
+    }
+
+    annualBtn.addEventListener('click', () => setActive(true));
+    monthlyBtn.addEventListener('click', () => setActive(false));
+
+    // Initial state
+    updateCharts(true);
+</script>
+{% endblock %}

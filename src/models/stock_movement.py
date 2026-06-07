@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -43,6 +44,7 @@ class StockMovement(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
     quantity: Mapped[int] = mapped_column()
+    price: Mapped[float] = mapped_column()
 
     type: Mapped[MovementType] = mapped_column(
         SqlEnum(MovementType)
@@ -53,15 +55,22 @@ class StockMovement(Base):
     )
 
     reason: Mapped[str] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default_factory=datetime.utcnow)
 
     product: Mapped[Product] = relationship(
         "Product",
-        back_populates="stock_movements"
+        back_populates="stock_movements",
+        init=False,
     )
 
     warehouse: Mapped[Warehouse] = relationship(
         "Warehouse",
-        back_populates="stock_movements"
+        back_populates="stock_movements",
+        init=False,
     )
     
-    user: Mapped[User] = relationship("User", back_populates="stock_movements")
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="stock_movements",
+        init=False,
+    )

@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Stock - Mini ERP{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-brand">Mini ERP</div>
+        <ul class="navbar-menu">
+            <li><a href="/dashboard">Tableau de bord</a></li>
+            {% if user.role and user.has_permission('read_product') %}
+            <li><a href="/products">Produits</a></li>
+            {% endif %}
+            {% if user.role and user.has_permission('manage_users') %}
+            <li><a href="/users">Utilisateurs</a></li>
+            {% endif %}
+            {% if user.role and user.has_permission('manage_stock') %}
+            <li><a href="/stock" class="active">Stock</a></li>
+            {% endif %}
+        </ul>
+        <div class="navbar-end">
+            <a href="/logout" class="logout-btn">Déconnexion</a>
+            <div class="user-info">
+                <span>{{ user.username }}</span>
+                <span class="user-role">{{ user.role.role_name.value if user.role else 'N/A' }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header">
+            <h1>Stock</h1>
+            <p class="date">{{ current_date }}</p>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-value">{{ stock_stats.total_products }}</div>
+                <div class="kpi-label">Produits</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ stock_stats.total_quantity }}</div>
+                <div class="kpi-label">Unités en stock</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ stock_stats.low_stock_count }}</div>
+                <div class="kpi-label">Stock faible</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">{{ stock_stats.warehouses_count }}</div>
+                <div class="kpi-label">Entrepôts</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>État du stock par entrepôt</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Entrepôt</th>
+                        <th>Total unités</th>
+                        <th>Produits</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if stock_by_warehouse %}
+                        {% for warehouse in stock_by_warehouse %}
+                        <tr>
+                            <td>{{ warehouse.name }}</td>
+                            <td>{{ warehouse.total_quantity }}</td>
+                            <td>{{ warehouse.product_count }}</td>
+                            <td>
+                                <span class="badge {% if warehouse.product_count > 0 %}badge-success{% else %}badge-warning{% endif %}">
+                                    {% if warehouse.product_count > 0 %}Actif{% else %}Vide{% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center">Aucun entrepôt disponible</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section chart-section">
+            <div class="chart-grid-large">
+                <div class="chart-card-large">
+                    <h3>Activité par entrepôt</h3>
+                    <canvas id="warehouseActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Historique des mouvements</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Produit</th>
+                        <th>Type</th>
+                        <th>Quantité</th>
+                        <th>Prix unitaire</th>
+                        <th>Montant</th>
+                        <th>Entrepôt</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if movement_history %}
+                        {% for movement in movement_history %}
+                        <tr>
+                            <td>{{ movement.product_name }}</td>
+                            <td>
+                                <span class="badge {% if movement.movement_type == 'IN' %}badge-info{% else %}badge-warning{% endif %}">
+                                    {{ movement.movement_type }}
+                                </span>
+                            </td>
+                            <td>{{ movement.quantity }}</td>
+                            <td>€{{ movement.price | round(2) }}</td>
+                            <td>€{{ movement.total_amount | round(2) }}</td>
+                            <td>{{ movement.warehouse_name }}</td>
+                            <td>{{ movement.created_at.strftime('%d/%m/%Y %H:%M') if movement.created_at else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">Aucun mouvement dans l'historique</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            {% if movement_pages > 1 %}
+            <div class="pagination-controls">
+                <a href="?page={{ movement_page - 1 }}" class="page-link{% if movement_page <= 1 %} disabled{% endif %}">Précédent</a>
+                {% for p in range(1, movement_pages + 1) %}
+                <a href="?page={{ p }}" class="page-link{% if movement_page == p %} active{% endif %}">{{ p }}</a>
+                {% endfor %}
+                <a href="?page={{ movement_page + 1 }}" class="page-link{% if movement_page >= movement_pages %} disabled{% endif %}">Suivant</a>
+            </div>
+            <div class="page-info">Page {{ movement_page }} sur {{ movement_pages }} - {{ movement_total }} mouvements</div>
+            {% endif %}
+        </div>
+
+        <div class="section chart-section">
+            <div class="chart-grid-small">
+                <div class="chart-card-small">
+                    <h3>Distribution des mouvements</h3>
+                    <canvas id="movementCountChart"></canvas>
+                </div>
+                <div class="chart-card-small">
+                    <h3>Quantités IN/OUT</h3>
+                    <canvas id="movementQuantityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const movementBreakdown = {{ movement_breakdown | tojson | safe }};
+    const warehouseActivity = {{ warehouse_activity | tojson | safe }};
+
+    const countsCtx = document.getElementById('movementCountChart').getContext('2d');
+    new Chart(countsCtx, {
+        type: 'doughnut',
+        data: {
+            labels: movementBreakdown.labels,
+            datasets: [{
+                data: movementBreakdown.counts,
+                backgroundColor: ['#6366f1', '#ec4899'],
+                borderColor: ['#e0e7ff', '#fbcfe8'],
+                borderWidth: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 16,
+                        font: { size: 14, weight: '500' },
+                        usePointStyle: true,
+                    },
+                },
+            },
+        },
+    });
+
+    const quantityCtx = document.getElementById('movementQuantityChart').getContext('2d');
+    new Chart(quantityCtx, {
+        type: 'bar',
+        data: {
+            labels: movementBreakdown.labels,
+            datasets: [{
+                label: 'Quantité',
+                data: movementBreakdown.quantities,
+                backgroundColor: ['#0ea5e9', '#f97316'],
+                borderColor: ['#0284c7', '#ea580c'],
+                borderWidth: 1,
+                borderRadius: 6,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        padding: 16,
+                        font: { size: 14, weight: '500' },
+                    },
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#f1f5f9' },
+                },
+                x: {
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+
+    const activityCtx = document.getElementById('warehouseActivityChart').getContext('2d');
+    new Chart(activityCtx, {
+        type: 'bar',
+        data: {
+            labels: warehouseActivity.labels,
+            datasets: [{
+                label: 'Mouvements',
+                data: warehouseActivity.counts,
+                backgroundColor: '#8b5cf6',
+                borderColor: '#7c3aed',
+                borderWidth: 1,
+                borderRadius: 6,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        padding: 16,
+                        font: { size: 14, weight: '500' },
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    grid: { color: '#f1f5f9' },
+                },
+                y: {
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+</script>
+{% endblock %}

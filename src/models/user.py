@@ -25,7 +25,10 @@ class User(Base):
     role: Mapped[Role] = relationship("Role", back_populates="users")
     stock_movements: Mapped[list[StockMovement]] = relationship("StockMovement", back_populates="user")
     
-    
-    
-
+    def has_permission(self, permission_code: str) -> bool:
+        """Check if user has a specific permission."""
+        if not self.role:
+            return False
+        
+        return any(p.code == permission_code for p in self.role.permissions)
 

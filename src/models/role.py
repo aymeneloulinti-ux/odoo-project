@@ -6,7 +6,6 @@ from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
-from models.role_permission_table import role_permission
 
 if TYPE_CHECKING:
     from models.user import User

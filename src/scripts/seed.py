@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 
 # Ensure src package is on path when running the script directly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -113,6 +113,14 @@ def seed():
 
         p1 = get_or_create_product("Laptop", 1200.0, c1)
         p2 = get_or_create_product("Pen", 1.5, c2)
+        p3 = get_or_create_product("Monitor", 350.0, c1)
+        p4 = get_or_create_product("Keyboard", 89.99, c1)
+        p5 = get_or_create_product("Mouse", 45.0, c1)
+        p6 = get_or_create_product("Notebook", 5.0, c2)
+        p7 = get_or_create_product("Desk Lamp", 65.0, c1)
+        p8 = get_or_create_product("USB Cable", 12.0, c1)
+        p9 = get_or_create_product("Printer Paper", 8.5, c2)
+        p10 = get_or_create_product("Headset", 120.0, c1)
 
         # Users (idempotent)
         def get_or_create_user(username: str, role: Role) -> User:
@@ -138,19 +146,92 @@ def seed():
         u2 = get_or_create_user("warehouse_user", warehouse_role)
 
         # Stock movements (idempotent-ish)
-        def create_stock_movement_if_missing(product: Product, warehouse: Warehouse, user: User, quantity: int, mtype: MovementType, source: SourceModule, reason: str | None = None):
+        def month_delta(year: int, month: int, delta: int) -> tuple[int, int]:
+            total_months = year * 12 + month - 1 + delta
+            return divmod(total_months, 12)[0], divmod(total_months, 12)[1] + 1
+
+        def create_stock_movement_if_missing(product: Product, warehouse: Warehouse, user: User, quantity: int, mtype: MovementType, source: SourceModule, reason: str | None = None, price: float | None = None, created_at: datetime | None = None):
+            filters = {
+                "product_id": product.id,
+                "warehouse_id": warehouse.id,
+                "user_id": user.id,
+                "quantity": quantity,
+                "type": mtype,
+            }
+            if created_at is not None:
+                filters["created_at"] = created_at
+
             existing = session.execute(
-                select(StockMovement).filter_by(product_id=product.id, warehouse_id=warehouse.id, user_id=user.id, quantity=quantity, type=mtype)
+                select(StockMovement).filter_by(**filters)
             ).scalars().first()
             if existing:
                 return existing
-            sm = StockMovement(product=product, warehouse=warehouse, user=user, product_id=product.id, warehouse_id=warehouse.id, user_id=user.id, quantity=quantity, type=mtype, source_module=source, reason=reason)
+
+            if price is None:
+                price = product.unit_price if mtype == MovementType.OUT else round(product.unit_price * 0.75, 2)
+
+            sm = StockMovement(
+                product_id=product.id,
+                warehouse_id=warehouse.id,
+                user_id=user.id,
+                quantity=quantity,
+                price=price,
+                type=mtype,
+                source_module=source,
+                reason=reason,
+                created_at=created_at or datetime.utcnow(),
+            )
             session.add(sm)
             session.commit()
             return sm
 
-        sm1 = create_stock_movement_if_missing(p1, w1, u2, 10, MovementType.IN, SourceModule.MANUAL, "Initial stock")
-        sm2 = create_stock_movement_if_missing(p2, w1, u2, 100, MovementType.IN, SourceModule.MANUAL, None)
+        # Add opening stock at the beginning of the year
+        today = date.today()
+        start_of_year = datetime(today.year, 1, 5, 9, 0)
+        create_stock_movement_if_missing(p1, w1, u2, 20, MovementType.IN, SourceModule.MANUAL, "Opening stock", price=round(p1.unit_price * 0.55, 2), created_at=start_of_year)
+        create_stock_movement_if_missing(p2, w1, u2, 300, MovementType.IN, SourceModule.MANUAL, "Opening stock", price=round(p2.unit_price * 0.40, 2), created_at=start_of_year)
+        create_stock_movement_if_missing(p3, w1, u2, 18, MovementType.IN, SourceModule.MANUAL, "Opening stock", price=round(p3.unit_price * 0.55, 2), created_at=start_of_year)
+        create_stock_movement_if_missing(p6, w1, u2, 220, MovementType.IN, SourceModule.MANUAL, "Opening stock", price=round(p6.unit_price * 0.40, 2), created_at=start_of_year)
+
+        monthly_patterns = [
+            (p1, w1, 12, 8, 0.60, 1.30),
+            (p3, w1, 14, 10, 0.60, 1.30),
+            (p2, w2, 140, 120, 0.45, 1.10),
+            (p6, w2, 120, 98, 0.40, 1.15),
+        ]
+
+        for offset in range(12):
+            year, month = month_delta(today.year, today.month, -offset)
+            month_date = datetime(year, month, 15, 10, 0)
+
+            for product, warehouse, base_in, base_out, cost_factor, sell_multiplier in monthly_patterns:
+                in_qty = max(base_in + (offset % 3) * 2, 1)
+                out_qty = max(base_out + (offset % 4) * 2, 0)
+                purchase_price = round(product.unit_price * cost_factor, 2)
+                sale_price = round(product.unit_price * sell_multiplier, 2)
+
+                create_stock_movement_if_missing(
+                    product,
+                    warehouse,
+                    u2,
+                    in_qty,
+                    MovementType.IN,
+                    SourceModule.PURCHASE,
+                    f"Monthly purchase for {product.name}",
+                    price=purchase_price,
+                    created_at=month_date,
+                )
+                create_stock_movement_if_missing(
+                    product,
+                    warehouse,
+                    u2,
+                    out_qty,
+                    MovementType.OUT,
+                    SourceModule.SALES,
+                    f"Monthly sale for {product.name}",
+                    price=sale_price,
+                    created_at=month_date,
+                )
 
         print("Seeding completed successfully")
     except Exception as exc:

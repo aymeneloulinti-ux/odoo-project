@@ -32,14 +32,16 @@ def create_movement(payload, db: Session) -> StockMovement:
     if not usr:
         raise HTTPException(status_code=400, detail="User not found")
 
+    price = payload.price if getattr(payload, "price", None) is not None else (
+        prod.unit_price if payload.type == "OUT" else 0.0
+    )
+
     sm = StockMovement(
-        product=prod,
-        warehouse=wh,
-        user=usr,
         product_id=prod.id,
         warehouse_id=wh.id,
         user_id=usr.id,
         quantity=payload.quantity,
+        price=price,
         type=payload.type,
         source_module=payload.source_module,
         reason=payload.reason,

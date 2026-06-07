@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 from enum import Enum
@@ -125,6 +126,7 @@ class StockMovementBase(BaseModel):
     warehouse_id: int
     user_id: int
     quantity: int
+    price: float
     type: str
     source_module: str
     reason: Optional[str] = None
@@ -136,6 +138,7 @@ class StockMovementCreate(StockMovementBase):
 
 class StockMovementOut(StockMovementBase):
     id: int
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
