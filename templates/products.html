@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Produits - Mini ERP{% endblock %}
+{% block title %}Products - Mini ERP{% endblock %}
 
 {% block content %}
 <div class="dashboard">
@@ -8,19 +8,19 @@
     <nav class="navbar">
         <div class="navbar-brand">Mini ERP</div>
         <ul class="navbar-menu">
-            <li><a href="/dashboard">Tableau de bord</a></li>
+            <li><a href="/ui/dashboard">Dashboard</a></li>
             {% if can_read_product %}
-            <li><a href="/products" class="active">Produits</a></li>
+            <li><a href="/ui/products" class="active">Products</a></li>
             {% endif %}
             {% if user.role and user.has_permission('manage_users') %}
-            <li><a href="/users">Utilisateurs</a></li>
+            <li><a href="/ui/users">Users</a></li>
             {% endif %}
             {% if user.role and user.has_permission('manage_stock') %}
-            <li><a href="/stock">Stock</a></li>
+            <li><a href="/ui/stock">Stock</a></li>
             {% endif %}
         </ul>
         <div class="navbar-end">
-            <a href="/logout" class="logout-btn">Déconnexion</a>
+            <a href="/ui/logout" class="logout-btn">Logout</a>
             <div class="user-info">
                 <span>{{ user.username }}</span>
                 <span class="user-role">{{ user.role.role_name.value if user.role else 'N/A' }}</span>
@@ -30,7 +30,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>Produits</h1>
+            <h1>Products</h1>
             <p class="date">{{ current_date }}</p>
         </div>
 
@@ -40,13 +40,13 @@
             <div class="kpi-card">
                 <div class="kpi-label">Best Seller</div>
                 <div class="kpi-value">{{ best_seller.name }}</div>
-                <div class="kpi-detail">{{ best_seller.total_sold }} unités vendues</div>
+                <div class="kpi-detail">{{ best_seller.total_sold }} units sold</div>
             </div>
             {% endif %}
 
             {% if most_profitable %}
             <div class="kpi-card">
-                <div class="kpi-label">Plus rentable</div>
+                <div class="kpi-label">Most profitable</div>
                 <div class="kpi-value">{{ most_profitable.name }}</div>
                 <div class="kpi-detail">Profit: €{{ most_profitable.profit | round(2) }}</div>
             </div>
@@ -54,36 +54,38 @@
 
             {% if least_seller %}
             <div class="kpi-card">
-                <div class="kpi-label">Moins vendu</div>
+                <div class="kpi-label">Least sold</div>
                 <div class="kpi-value">{{ least_seller.name }}</div>
-                <div class="kpi-detail">{{ least_seller.total_sold }} unités vendues</div>
+                <div class="kpi-detail">{{ least_seller.total_sold }} units sold</div>
             </div>
             {% endif %}
 
             <div class="kpi-card">
+                <div class="kpi-label">Total products</div>
                 <div class="kpi-value">{{ all_products | length }}</div>
-                <div class="kpi-label">Total de produits</div>
+
             </div>
         </div>
 
         <!-- Search Bar & Add Button -->
-        <div class="section search-section">
-            <div class="search-container">
-                <input 
-                    type="text" 
-                    id="productSearch" 
-                    placeholder="Rechercher un produit par nom..." 
-                    class="search-input"
-                >
-            </div>
-            {% if can_write_product %}
-            <button class="btn btn-primary" onclick="openProductModal()">+ Ajouter un produit</button>
-            {% endif %}
-        </div>
+        
 
         <!-- Products List Section -->
         <div class="section">
-            <h2>Tous les produits</h2>
+            <!-- Search Bar & Add Button -->
+            <div class="section search-section">
+                <div class="search-container">
+                    <input 
+                        type="text" 
+                        id="productSearch" 
+                        placeholder="Search a product by name..." 
+                        class="search-input"
+                    >
+                </div>
+                {% if can_write_product %}
+                <button class="btn btn-primary" onclick="openProductModal()">+ Add product</button>
+                {% endif %}
+            </div>
             <div id="products-list-container">
                 {% include 'partials/product_list.html' %}
             </div>
@@ -92,14 +94,14 @@
         <!-- Low Stock Alert Section -->
         {% if low_stock_products %}
         <div class="section alert-section">
-            <h2>⚠️ Produits à réapprovisionner (Stock < 10)</h2>
+            <h2>⚠️ Reorder products (Stock < 10)</h2>
             <table class="table alert-table">
                 <thead>
                     <tr>
-                        <th>Produit</th>
-                        <th>Catégorie</th>
-                        <th>Stock actuel</th>
-                        <th>Prix unitaire</th>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th>Current stock</th>
+                        <th>Unit price</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -112,7 +114,7 @@
                         <td>€{{ product.unit_price | round(2) }}</td>
                         <td>
                             {% if can_write_product %}
-                            <button class="btn btn-sm btn-secondary" onclick="editProduct({{ product.id }})">Modifier</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editProduct({{ product.id }})">Edit</button>
                             {% endif %}
                         </td>
                     </tr>
@@ -129,7 +131,7 @@
 <div id="productModal" class="modal" style="display:none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h2 id="modalTitle">Ajouter un produit</h2>
+            <h2 id="modalTitle">Add product</h2>
             <span class="close" onclick="closeProductModal()">&times;</span>
         </div>
         <div class="modal-body">
@@ -137,27 +139,27 @@
                 <input type="hidden" id="productId" value="">
                 
                 <div class="form-group">
-                    <label for="productName">Nom du produit *</label>
+                    <label for="productName">Product name *</label>
                     <input type="text" id="productName" name="name" required class="form-input">
                 </div>
 
                 <div class="form-group">
-                    <label for="productPrice">Prix unitaire (€) *</label>
+                    <label for="productPrice">Unit price (€) *</label>
                     <input type="number" id="productPrice" name="unit_price" step="0.01" min="0" required class="form-input">
                 </div>
 
                 <div class="form-group">
-                    <label for="productCategory">Catégorie *</label>
+                    <label for="productCategory">Category *</label>
                     <select id="productCategory" name="category_id" required class="form-input">
-                        <option value="">-- Sélectionner une catégorie --</option>
+                        <option value="">-- Select a category --</option>
                         <!-- Categories will be loaded via JS -->
                     </select>
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeProductModal()">Annuler</button>
-                    <button type="button" id="deleteBtn" class="btn btn-danger" style="display:none;" onclick="deleteProduct()">Supprimer</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeProductModal()">Cancel</button>
+                    <button type="button" id="deleteBtn" class="btn btn-danger" style="display:none;" onclick="deleteProduct()">Delete</button>
                 </div>
             </form>
         </div>
@@ -418,207 +420,13 @@
         gap: 20px;
         margin-bottom: 40px;
     }
-
-    .kpi-card {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        border-left: 4px solid #6366f1;
-    }
-
-    .kpi-label {
-        font-size: 12px;
-        text-transform: uppercase;
-        color: #6b7280;
-        font-weight: 600;
-        margin-bottom: 8px;
-    }
-
-    .kpi-value {
-        font-size: 20px;
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 8px;
-        word-break: break-word;
-    }
-
-    .kpi-detail {
-        font-size: 12px;
-        color: #9ca3af;
-    }
+    /* KPI styles use the shared rules from static/css/dashboard.css */
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    const canWriteProduct = {{ can_write_product | tojson | safe }};
-    let categories = [];
-    let currentProductId = null;
-
-    // Load categories on page load
-    document.addEventListener('DOMContentLoaded', async () => {
-        await loadCategories();
-        attachProductSearchListener();
-    });
-
-    async function loadCategories() {
-        try {
-            const response = await fetch('/categories/', {
-                headers: { 'Accept': 'application/json' }
-            });
-            if (response.ok) {
-                categories = await response.json();
-                const select = document.getElementById('productCategory');
-                categories.forEach(cat => {
-                    const option = document.createElement('option');
-                    option.value = cat.id;
-                    option.textContent = cat.name;
-                    select.appendChild(option);
-                });
-            }
-        } catch (error) {
-            console.error('Erreur lors du chargement des catégories:', error);
-        }
-    }
-
-    function attachProductSearchListener() {
-        const searchInput = document.getElementById('productSearch');
-        if (!searchInput) return;
-
-        let searchTimeout;
-        searchInput.addEventListener('input', (event) => {
-            clearTimeout(searchTimeout);
-            const query = event.target.value.trim();
-
-            if (!query) {
-                location.reload();
-                return;
-            }
-
-            searchTimeout = setTimeout(() => {
-                searchProducts(query);
-            }, 300);
-        });
-    }
-
-    async function searchProducts(query) {
-        try {
-            const response = await fetch(`/products/search?q=${encodeURIComponent(query)}`);
-            if (response.ok) {
-                const html = await response.text();
-                const container = document.getElementById('products-list-container');
-                if (container) {
-                    container.innerHTML = html;
-                }
-            }
-        } catch (error) {
-            console.error('Erreur lors de la recherche:', error);
-        }
-    }
-
-    function openProductModal() {
-        currentProductId = null;
-        document.getElementById('modalTitle').textContent = 'Ajouter un produit';
-        document.getElementById('productId').value = '';
-        document.getElementById('productForm').reset();
-        document.getElementById('deleteBtn').style.display = 'none';
-        document.getElementById('productModal').style.display = 'flex';
-    }
-
-    function closeProductModal() {
-        document.getElementById('productModal').style.display = 'none';
-        currentProductId = null;
-    }
-
-    async function editProduct(productId) {
-        try {
-            const response = await fetch(`/products/${productId}`);
-            if (response.ok) {
-                const product = await response.json();
-                currentProductId = productId;
-                
-                document.getElementById('modalTitle').textContent = 'Modifier le produit';
-                document.getElementById('productId').value = productId;
-                document.getElementById('productName').value = product.name;
-                document.getElementById('productPrice').value = product.unit_price;
-                document.getElementById('productCategory').value = product.category_id || '';
-                
-                const deleteBtn = document.getElementById('deleteBtn');
-                if (canWriteProduct) {
-                    deleteBtn.style.display = 'inline-block';
-                }
-                
-                document.getElementById('productModal').style.display = 'flex';
-            }
-        } catch (error) {
-            console.error('Erreur lors du chargement du produit:', error);
-            alert('Erreur lors du chargement du produit');
-        }
-    }
-
-    document.getElementById('productForm').addEventListener('submit', async (event) => {
-        event.preventDefault();
-
-        const productId = document.getElementById('productId').value;
-        const payload = {
-            name: document.getElementById('productName').value,
-            unit_price: parseFloat(document.getElementById('productPrice').value),
-            category_id: parseInt(document.getElementById('productCategory').value),
-        };
-
-        try {
-            const method = productId ? 'PUT' : 'POST';
-            const url = productId ? `/products/${productId}` : '/products/';
-
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-
-            if (response.ok) {
-                closeProductModal();
-                location.reload();
-            } else {
-                const error = await response.json();
-                alert('Erreur: ' + (error.detail || 'Une erreur s\'est produite'));
-            }
-        } catch (error) {
-            console.error('Erreur lors de l\'enregistrement:', error);
-            alert('Erreur lors de l\'enregistrement');
-        }
-    });
-
-    async function deleteProduct() {
-        if (!currentProductId || !confirm('Êtes-vous sûr de vouloir supprimer ce produit?')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/products/${currentProductId}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                closeProductModal();
-                location.reload();
-            } else {
-                const error = await response.json().catch(() => null);
-                alert('Erreur lors de la suppression: ' + (error?.detail || 'Une erreur s\'est produite'));
-            }
-        } catch (error) {
-            console.error('Erreur lors de la suppression:', error);
-            alert('Erreur lors de la suppression');
-        }
-    }
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        const modal = document.getElementById('productModal');
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    }
+    window.canWriteProduct = {{ can_write_product | tojson | safe }};
 </script>
+<script src="{{ url_for('static', path='/js/products.js') }}"></script>
 {% endblock %}

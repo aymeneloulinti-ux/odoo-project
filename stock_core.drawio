@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="xvvw0kHihatD4XQX-sIg" name="Page-1">
-        <mxGraphModel dx="2225" dy="2380" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+        <mxGraphModel dx="1560" dy="2374" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -63,25 +63,6 @@
                 </mxCell>
                 <mxCell id="24" value="Toutes les modifications de stock passent par cette table&lt;div&gt;&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;Stock réel = SUM(IN) - SUM(OUT)&lt;/span&gt;&lt;/div&gt;&lt;br/&gt;&lt;br/&gt;&lt;br/&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" style="text;whiteSpace=wrap;html=1;align=center;" parent="1" vertex="1">
                     <mxGeometry x="423" y="447" width="310" height="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="25" value="" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
-                    <mxGeometry x="474.5" y="585" width="195" height="65" as="geometry"/>
-                </mxCell>
-                <mxCell id="26" value="&lt;b&gt;Stock Service / API&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="488.75" y="588.5" width="166.5" height="30" as="geometry"/>
-                </mxCell>
-                <mxCell id="27" value="" style="endArrow=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="25" target="19" edge="1">
-                    <mxGeometry width="50" height="50" relative="1" as="geometry">
-                        <mxPoint x="430" y="590" as="sourcePoint"/>
-                        <mxPoint x="472" y="286" as="targetPoint"/>
-                        <Array as="points">
-                            <mxPoint x="344" y="617"/>
-                            <mxPoint x="344" y="328"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="29" value="create_stock_move()" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="488.75" y="618.5" width="166.5" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="30" value="category" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;fillColor=none;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="64" y="450" width="150" height="104" as="geometry"/>

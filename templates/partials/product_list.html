@@ -1,10 +1,10 @@
 <table class="table">
     <thead>
         <tr>
-            <th>Produit</th>
-            <th>Catégorie</th>
-            <th>Prix unitaire</th>
-            <th>Stock actuel</th>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Unit price</th>
+            <th>Current stock</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -24,14 +24,14 @@
                 </td>
                 <td>
                     {% if can_write_product %}
-                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); editProduct({{ product.id }})">Modifier</button>
+                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); editProduct({{ product.id }})">Edit</button>
                     {% endif %}
                 </td>
             </tr>
             {% endfor %}
         {% else %}
         <tr>
-            <td colspan="5" class="text-center">Aucun produit disponible</td>
+            <td colspan="5" class="text-center">No products available</td>
         </tr>
         {% endif %}
     </tbody>

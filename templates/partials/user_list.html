@@ -1,0 +1,32 @@
+<table class="table">
+    <thead>
+        <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Active</th>
+            <th>Created at</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if users %}
+            {% for u in users %}
+            <tr {% if can_manage_users %}onclick="editUser({{ u.id }})" class="clickable-row"{% endif %}>
+                <td><strong>{{ u.username }}</strong></td>
+                <td>{{ u.role.role_name.value if u.role else 'N/A' }}</td>
+                <td>{% if u.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-warning">Inactive</span>{% endif %}</td>
+                <td>{{ u.created_at }}</td>
+                <td>
+                    {% if can_manage_users %}
+                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); editUser({{ u.id }})">Edit</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+        <tr>
+            <td colspan="5" class="text-center">No users</td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>

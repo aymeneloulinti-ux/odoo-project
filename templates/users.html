@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Mini ERP{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <nav class="navbar">
+        <div class="navbar-brand">Mini ERP</div>
+        <ul class="navbar-menu">
+            <li><a href="/ui/dashboard">Dashboard</a></li>
+            {% if can_read_product %}
+            <li><a href="/ui/products">Products</a></li>
+            {% endif %}
+            {% if user.role and user.has_permission('manage_users') %}
+            <li><a href="/ui/users" class="active">Users</a></li>
+            {% endif %}
+            {% if user.role and user.has_permission('manage_stock') %}
+            <li><a href="/ui/stock">Stock</a></li>
+            {% endif %}
+        </ul>
+        <div class="navbar-end">
+            <a href="/ui/logout" class="logout-btn">Logout</a>
+            <div class="user-info">
+                <span>{{ user.username }}</span>
+                <span class="user-role">{{ user.role.role_name.value if user.role else 'N/A' }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header">
+            <h1>Users</h1>
+            <p class="date">{{ current_date }}</p>
+        </div>
+
+        <div class="section">
+            <div class="section search-section">
+                <h2>All users</h2>
+                {% if can_manage_users %}
+                <button class="btn btn-primary" onclick="openUserModal()">+ Add user</button>
+                {% endif %}
+            </div>
+            <div id="users-list-container">
+                {% include 'partials/user_list.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Modal -->
+<div id="userModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="userModalTitle">Add user</h2>
+            <span class="close" onclick="closeUserModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="userForm" class="form">
+                <input type="hidden" id="userId" value="">
+
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <input type="text" id="username" name="username" required class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password <small>(leave blank to keep current)</small></label>
+                    <input type="password" id="password" name="password" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label for="userRole">Role *</label>
+                    <select id="userRole" name="role_id" required class="form-input">
+                        <option value="">-- Select a role --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label><input type="checkbox" id="isActive" name="is_active"> Active</label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+                    <button type="button" id="userDeleteBtn" class="btn btn-danger" style="display:none;" onclick="deleteUser()">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') }}">
+<style>
+    .search-section {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+    }
+
+    .search-container {
+        flex: 1;
+    }
+
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background-color: white;
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 500px;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #e0e7ff;
+        padding-bottom: 16px;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: #1f2937;
+    }
+
+    .close {
+        cursor: pointer;
+        font-size: 24px;
+        color: #6b7280;
+        transition: color 0.2s;
+    }
+
+    .close:hover {
+        color: #1f2937;
+    }
+
+    .modal-body {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #374151;
+        font-size: 14px;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.2s;
+        box-sizing: border-box;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 24px;
+        justify-content: flex-end;
+    }
+
+    .btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: #6366f1;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4f46e5;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover {
+        background: #d1d5db;
+    }
+
+    .btn-danger {
+        background: #ef4444;
+        color: white;
+        margin-right: auto;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .table th {
+        background: #f9fafb;
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        font-size: 12px;
+        text-transform: uppercase;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #e5e7eb;
+        color: #374151;
+    }
+
+    .table tr:hover {
+        background: #f9fafb;
+    }
+
+    .clickable-row {
+        cursor: pointer;
+    }
+
+    .clickable-row:hover {
+        background: #eef2ff;
+    }
+
+    .text-center {
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.canManageUsers = {{ can_manage_users | tojson | safe }};
+</script>
+<script src="{{ url_for('static', path='/js/users.js') }}"></script>
+{% endblock %}

@@ -8,19 +8,19 @@
     <nav class="navbar">
         <div class="navbar-brand">Mini ERP</div>
         <ul class="navbar-menu">
-            <li><a href="/dashboard">Tableau de bord</a></li>
+            <li><a href="/ui/dashboard">Dashboard</a></li>
             {% if user.role and user.has_permission('read_product') %}
-            <li><a href="/products">Produits</a></li>
+            <li><a href="/ui/products">Products</a></li>
             {% endif %}
             {% if user.role and user.has_permission('manage_users') %}
-            <li><a href="/users">Utilisateurs</a></li>
+            <li><a href="/ui/users">Users</a></li>
             {% endif %}
             {% if user.role and user.has_permission('manage_stock') %}
-            <li><a href="/stock" class="active">Stock</a></li>
+            <li><a href="/ui/stock" class="active">Stock</a></li>
             {% endif %}
         </ul>
         <div class="navbar-end">
-            <a href="/logout" class="logout-btn">Déconnexion</a>
+            <a href="/ui/logout" class="logout-btn">Logout</a>
             <div class="user-info">
                 <span>{{ user.username }}</span>
                 <span class="user-role">{{ user.role.role_name.value if user.role else 'N/A' }}</span>
@@ -37,50 +37,54 @@
         <div class="kpi-grid">
             <div class="kpi-card">
                 <div class="kpi-value">{{ stock_stats.total_products }}</div>
-                <div class="kpi-label">Produits</div>
+                <div class="kpi-label">Products</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-value">{{ stock_stats.total_quantity }}</div>
-                <div class="kpi-label">Unités en stock</div>
+                <div class="kpi-label">Units in stock</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-value">{{ stock_stats.low_stock_count }}</div>
-                <div class="kpi-label">Stock faible</div>
+                <div class="kpi-label">Low stock</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-value">{{ stock_stats.warehouses_count }}</div>
-                <div class="kpi-label">Entrepôts</div>
+                <div class="kpi-label">Warehouses</div>
             </div>
         </div>
 
         <div class="section">
-            <h2>État du stock par entrepôt</h2>
+            <h2>Warehouse stock status</h2>
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Entrepôt</th>
-                        <th>Total unités</th>
-                        <th>Produits</th>
-                        <th>Statut</th>
+                        <th>Warehouse</th>
+                        <th>Total units</th>
+                        <th>Products</th>
+                        <th>Status</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% if stock_by_warehouse %}
                         {% for warehouse in stock_by_warehouse %}
-                        <tr>
+                        <tr class="clickable-row" onclick="selectWarehouse({{ warehouse.id }}, '{{ warehouse.name }}')">
                             <td>{{ warehouse.name }}</td>
                             <td>{{ warehouse.total_quantity }}</td>
                             <td>{{ warehouse.product_count }}</td>
                             <td>
                                 <span class="badge {% if warehouse.product_count > 0 %}badge-success{% else %}badge-warning{% endif %}">
-                                    {% if warehouse.product_count > 0 %}Actif{% else %}Vide{% endif %}
+                                    {% if warehouse.product_count > 0 %}Active{% else %}Empty{% endif %}
                                 </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openWarehouseModal({{ warehouse.id }}, '{{ warehouse.name }}')">Edit</button>
                             </td>
                         </tr>
                         {% endfor %}
                     {% else %}
                     <tr>
-                        <td colspan="4" class="text-center">Aucun entrepôt disponible</td>
+                        <td colspan="5" class="text-center">No warehouses available</td>
                     </tr>
                     {% endif %}
                 </tbody>
@@ -88,16 +92,22 @@
         </div>
 
         <div class="section chart-section">
+            <div class="chart-controls">
+                <h3 id="trendChartTitle">Movement trend - All warehouses</h3>
+                <div class="period-selector">
+                    <button class="period-btn active" onclick="changePeriod('daily')">Daily (30 days)</button>
+                    <button class="period-btn" onclick="changePeriod('monthly')">Monthly (12 months)</button>
+                </div>
+            </div>
             <div class="chart-grid-large">
                 <div class="chart-card-large">
-                    <h3>Activité par entrepôt</h3>
                     <canvas id="warehouseActivityChart"></canvas>
                 </div>
             </div>
         </div>
 
         <div class="section">
-            <h2>Historique des mouvements</h2>
+            <h2>Movement history</h2>
             <div id="movement-history-container">
                 {% include 'partials/stock_movement_history.html' %}
             </div>
@@ -106,176 +116,254 @@
         <div class="section chart-section">
             <div class="chart-grid-small">
                 <div class="chart-card-small">
-                    <h3>Distribution des mouvements</h3>
+                    <h3>Movement distribution</h3>
                     <canvas id="movementCountChart"></canvas>
                 </div>
                 <div class="chart-card-small">
-                    <h3>Quantités IN/OUT</h3>
+                    <h3>IN/OUT quantities</h3>
                     <canvas id="movementQuantityChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Warehouse Modal -->
+<div id="warehouseModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Edit warehouse</h2>
+            <span class="close" onclick="closeWarehouseModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="warehouseForm" class="form">
+                <input type="hidden" id="warehouseId" value="">
+                
+                <div class="form-group">
+                    <label for="warehouseName">Warehouse name *</label>
+                    <input type="text" id="warehouseName" name="name" required class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label for="warehouseLocation">Location *</label>
+                    <input type="text" id="warehouseLocation" name="location" required class="form-input">
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeWarehouseModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') }}">
+<style>
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background-color: white;
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 500px;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #e0e7ff;
+        padding-bottom: 16px;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: #1f2937;
+    }
+
+    .close {
+        cursor: pointer;
+        font-size: 24px;
+        color: #6b7280;
+        transition: color 0.2s;
+    }
+
+    .close:hover {
+        color: #1f2937;
+    }
+
+    .modal-body {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #374151;
+        font-size: 14px;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.2s;
+        box-sizing: border-box;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 24px;
+        justify-content: flex-end;
+    }
+
+    .btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: #6366f1;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4f46e5;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover {
+        background: #d1d5db;
+    }
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .badge-warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .clickable-row {
+        cursor: pointer;
+    }
+
+    .clickable-row:hover {
+        background: #eef2ff;
+    }
+
+    .text-center {
+        text-align: center;
+    }
+
+    .chart-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .chart-controls h3 {
+        margin: 0;
+        font-size: 18px;
+        color: #1f2937;
+    }
+
+    .period-selector {
+        display: flex;
+        gap: 8px;
+    }
+
+    .period-btn {
+        padding: 8px 16px;
+        border: 1px solid #d1d5db;
+        background: white;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #374151;
+    }
+
+    .period-btn:hover {
+        border-color: #6366f1;
+        color: #6366f1;
+    }
+
+    .period-btn.active {
+        background: #6366f1;
+        border-color: #6366f1;
+        color: white;
+    }
+
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const movementBreakdown = {{ movement_breakdown | tojson | safe }};
-    const warehouseActivity = {{ warehouse_activity | tojson | safe }};
-
-    const countsCtx = document.getElementById('movementCountChart').getContext('2d');
-    new Chart(countsCtx, {
-        type: 'doughnut',
-        data: {
-            labels: movementBreakdown.labels,
-            datasets: [{
-                data: movementBreakdown.counts,
-                backgroundColor: ['#6366f1', '#ec4899'],
-                borderColor: ['#e0e7ff', '#fbcfe8'],
-                borderWidth: 2,
-            }],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 16,
-                        font: { size: 14, weight: '500' },
-                        usePointStyle: true,
-                    },
-                },
-            },
-        },
-    });
-
-    const quantityCtx = document.getElementById('movementQuantityChart').getContext('2d');
-    new Chart(quantityCtx, {
-        type: 'bar',
-        data: {
-            labels: movementBreakdown.labels,
-            datasets: [{
-                label: 'Quantité',
-                data: movementBreakdown.quantities,
-                backgroundColor: ['#0ea5e9', '#f97316'],
-                borderColor: ['#0284c7', '#ea580c'],
-                borderWidth: 1,
-                borderRadius: 6,
-            }],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        padding: 16,
-                        font: { size: 14, weight: '500' },
-                    },
-                },
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: { color: '#f1f5f9' },
-                },
-                x: {
-                    grid: { display: false },
-                },
-            },
-        },
-    });
-
-    const activityCtx = document.getElementById('warehouseActivityChart').getContext('2d');
-    new Chart(activityCtx, {
-        type: 'bar',
-        data: {
-            labels: warehouseActivity.labels,
-            datasets: [{
-                label: 'Mouvements',
-                data: warehouseActivity.counts,
-                backgroundColor: '#8b5cf6',
-                borderColor: '#7c3aed',
-                borderWidth: 1,
-                borderRadius: 6,
-            }],
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        padding: 16,
-                        font: { size: 14, weight: '500' },
-                    },
-                },
-            },
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    grid: { color: '#f1f5f9' },
-                },
-                y: {
-                    grid: { display: false },
-                },
-            },
-        },
-    });
-
-    function attachMovementHistoryPagination() {
-        const container = document.getElementById('movement-history-container');
-        if (!container) {
-            return;
-        }
-
-        const links = container.querySelectorAll('.pagination-controls a.page-link');
-        links.forEach((link) => {
-            link.addEventListener('click', (event) => {
-                if (link.classList.contains('disabled') || link.classList.contains('active')) {
-                    event.preventDefault();
-                    return;
-                }
-
-                event.preventDefault();
-                const url = new URL(link.href, window.location.origin);
-                const nextPage = url.searchParams.get('page') || '1';
-                loadMovementHistory(parseInt(nextPage, 10));
-            });
-        });
-    }
-
-    async function loadMovementHistory(page) {
-        const response = await fetch(`/stock/history?page=${page}`);
-        if (!response.ok) {
-            console.error('Erreur lors du chargement de l’historique de mouvements');
-            return;
-        }
-
-        const html = await response.text();
-        const container = document.getElementById('movement-history-container');
-        if (!container) {
-            return;
-        }
-
-        container.innerHTML = html;
-        attachMovementHistoryPagination();
-        window.history.pushState({}, '', `?page=${page}`);
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        attachMovementHistoryPagination();
-    });
+    window.movementBreakdown = {{ movement_breakdown | tojson | safe }};
+    window.warehouseActivity = {{ warehouse_activity | tojson | safe }};
+    window.warehousesByWarehouse = {{ stock_by_warehouse | tojson | safe }};
 </script>
+<script src="{{ url_for('static', path='/js/stock_charts.js') }}"></script>
 {% endblock %}

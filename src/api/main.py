@@ -6,13 +6,13 @@ import sys
 # ensure src is on path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 # ensure the association table is imported before ORM models are used
 from models import role_permission_table
-from api.products import router as products_router
 from api.categories import router as categories_router
 from api.auth import router as auth_router
 from api.roles import router as roles_router
@@ -20,7 +20,9 @@ from api.permissions import router as permissions_router
 from api.warehouses import router as warehouses_router
 from api.stock_movements import router as stock_movements_router
 from api.users import router as users_router
-from api.ui import router as ui_router
+from api.ui import router as ui_router, get_warehouse_trend_data
+from api.products import router as products_router
+from database.session import get_session
 
 app = FastAPI(title="Mini ERP API")
 
@@ -41,6 +43,7 @@ app.state.templates = templates
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(ui_router)
 app.include_router(products_router)
 app.include_router(categories_router)
 app.include_router(roles_router)
@@ -48,7 +51,10 @@ app.include_router(permissions_router)
 app.include_router(warehouses_router)
 app.include_router(stock_movements_router)
 app.include_router(users_router)
-app.include_router(ui_router)
+
+@app.get("/api/warehouse-trend-data")
+def warehouse_trend_data(warehouse_id: int = Query(None), period: str = Query("daily", pattern="^(daily|monthly)$"), db: Session = Depends(get_session)):
+    return get_warehouse_trend_data(warehouse_id=warehouse_id, period=period, db=db)
 
 
 @app.get("/")
@@ -58,4 +64,3 @@ def root():
 
 # To run locally:
 # uvicorn src.api.main:app --reload
-

@@ -2,12 +2,12 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Produit</th>
+                <th>Product</th>
                 <th>Type</th>
-                <th>Quantité</th>
-                <th>Prix unitaire</th>
-                <th>Montant</th>
-                <th>Entrepôt</th>
+                <th>Quantity</th>
+                <th>Unit price</th>
+                <th>Amount</th>
+                <th>Warehouse</th>
                 <th>Date</th>
             </tr>
         </thead>
@@ -30,7 +30,7 @@
                 {% endfor %}
             {% else %}
             <tr>
-                <td colspan="7" class="text-center">Aucun mouvement dans l'historique</td>
+                <td colspan="7" class="text-center">No movements in history</td>
             </tr>
             {% endif %}
         </tbody>
@@ -39,13 +39,13 @@
     <div class="pagination">
         {% if movement_pages > 1 %}
         <div class="pagination-controls">
-            <a href="?page={{ movement_page - 1 }}" class="page-link{% if movement_page <= 1 %} disabled{% endif %}">Précédent</a>
+            <a href="?page={{ movement_page - 1 }}" class="page-link{% if movement_page <= 1 %} disabled{% endif %}">Previous</a>
             {% for p in range(1, movement_pages + 1) %}
             <a href="?page={{ p }}" class="page-link{% if movement_page == p %} active{% endif %}">{{ p }}</a>
             {% endfor %}
-            <a href="?page={{ movement_page + 1 }}" class="page-link{% if movement_page >= movement_pages %} disabled{% endif %}">Suivant</a>
+            <a href="?page={{ movement_page + 1 }}" class="page-link{% if movement_page >= movement_pages %} disabled{% endif %}">Next</a>
         </div>
-        <div class="page-info">Page {{ movement_page }} sur {{ movement_pages }} - {{ movement_total }} mouvements</div>
+        <div class="page-info">Page {{ movement_page }} of {{ movement_pages }} - {{ movement_total }} movements</div>
         {% endif %}
     </div>
 </div>

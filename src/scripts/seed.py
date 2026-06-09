@@ -8,8 +8,7 @@ from datetime import date, datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from database.session import get_session
-# ensure association table is defined before mappers are configured
-from models.role_permission_table import role_permission
+
 from models.role import Role, RoleName
 from models.permission import Permission
 from models.warehouse import Warehouse

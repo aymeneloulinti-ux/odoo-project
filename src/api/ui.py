@@ -1,10 +1,10 @@
 """UI Router for web interface with Jinja2 templates."""
 
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Request, Depends, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
@@ -13,9 +13,10 @@ from models.user import User
 from models.stock_movement import MovementType, StockMovement
 from models.warehouse import Warehouse
 from models.product import Product
+from models.role import Role
 
-from services.auth_service import authenticate_user, create_access_token, decode_access_token
-router = APIRouter(tags=["UI"])
+from services.auth_service import authenticate_user, create_access_token, decode_access_token, get_user, verify_password
+router = APIRouter(prefix="/ui", tags=["UI"])
 
 
 def get_templates(request: Request):
@@ -685,7 +686,7 @@ def login_page(request: Request):
     # Check if user is already logged in
     token = request.cookies.get("access_token")
     if token and decode_access_token(token):
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url="/ui/dashboard", status_code=302)
     
     return render_template(request, "login.html", {"error": None})
 
@@ -698,16 +699,21 @@ def login_handler(
     db: Session = Depends(get_session),
 ):
     """Handle login form submission."""
-    user = authenticate_user(db, username, password)
-    
-    if not user:
+    user = get_user(db, username)
+    if user is None:
         return render_template(request, "login.html", {"error": "Invalid credentials"})
-    
+
+    if not user.is_active:
+        return render_template(request, "login.html", {"error": "Utilisateur inactif. Contactez l'administrateur."})
+
+    if not verify_password(password, user.password_ash):
+        return render_template(request, "login.html", {"error": "Invalid credentials"})
+
     # Create access token
     access_token = create_access_token({"sub": user.username})
     
     # Create response with redirect and cookie
-    response = RedirectResponse(url="/dashboard", status_code=302)
+    response = RedirectResponse(url="/ui/dashboard", status_code=302)
     response.set_cookie("access_token", access_token, httponly=True, max_age=3600*24)
     
     return response
@@ -719,15 +725,15 @@ def dashboard(request: Request, db: Session = Depends(get_session)):
     token = request.cookies.get("access_token")
     
     if not token:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     username = decode_access_token(token)
     if not username:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
     
     # Get statistics
     stats = StockStats(db)
@@ -761,15 +767,15 @@ def stock_page(request: Request, page: int = Query(1, ge=1), db: Session = Depen
     """Render stock overview page."""
     token = request.cookies.get("access_token")
     if not token:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     username = decode_access_token(token)
     if not username:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     stats = StockStats(db)
     stock_stats = stats.get_stats()
@@ -802,15 +808,15 @@ def stock_history_fragment(request: Request, page: int = Query(1, ge=1), db: Ses
     """Return rendered movement history fragment for partial pagination updates."""
     token = request.cookies.get("access_token")
     if not token:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     username = decode_access_token(token)
     if not username:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     stats = StockStats(db)
     movement_info = stats.get_movement_history_page(page)
@@ -829,10 +835,113 @@ def stock_history_fragment(request: Request, page: int = Query(1, ge=1), db: Ses
     )
 
 
+@router.get("/api/warehouse-trend-data")
+def get_warehouse_trend_data(warehouse_id: int = Query(None), period: str = Query("daily", pattern="^(daily|monthly)$"), db: Session = Depends(get_session)):
+    """Get trend data for warehouse stock movements over time.
+    
+    period can be 'daily' (last 30 days) or 'monthly' (last 12 months)
+    """
+    today = date.today()
+    
+    if period == "daily":
+        # Last 30 days with daily granularity
+        start_date = today - timedelta(days=30)
+        date_labels = []
+        current = start_date
+        while current <= today:
+            date_labels.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+        
+        # Query movements grouped by date
+        date_expr = func.date_trunc("day", StockMovement.created_at).label("movement_date")
+        
+        query = db.query(
+            date_expr,
+            func.sum(
+                case(
+                    (StockMovement.type == MovementType.IN, StockMovement.quantity),
+                    else_=0,
+                )
+            ).label("in_qty"),
+            func.sum(
+                case(
+                    (StockMovement.type == MovementType.OUT, StockMovement.quantity),
+                    else_=0,
+                )
+            ).label("out_qty"),
+        ).filter(
+            StockMovement.created_at >= start_date
+        )
+        
+        if warehouse_id:
+            query = query.filter(StockMovement.warehouse_id == warehouse_id)
+        
+        rows = query.group_by(date_expr).order_by(date_expr).all()
+        
+        # Create mapping
+        row_map = {row.movement_date.date().strftime("%Y-%m-%d") if hasattr(row.movement_date, 'date') else row.movement_date.strftime("%Y-%m-%d"): (row.in_qty or 0, row.out_qty or 0) for row in rows}
+        
+        # Build data for all labels
+        in_data = [row_map.get(label, (0, 0))[0] for label in date_labels]
+        out_data = [row_map.get(label, (0, 0))[1] for label in date_labels]
+        
+    else:  # monthly
+        # Last 12 months with monthly granularity
+        def month_delta(year: int, month: int, delta: int) -> tuple[int, int]:
+            total_months = year * 12 + month - 1 + delta
+            return divmod(total_months, 12)[0], divmod(total_months, 12)[1] + 1
+        
+        month_expr = func.date_trunc("month", StockMovement.created_at).label("month")
+        
+        query = db.query(
+            month_expr,
+            func.sum(
+                case(
+                    (StockMovement.type == MovementType.IN, StockMovement.quantity),
+                    else_=0,
+                )
+            ).label("in_qty"),
+            func.sum(
+                case(
+                    (StockMovement.type == MovementType.OUT, StockMovement.quantity),
+                    else_=0,
+                )
+            ).label("out_qty"),
+        )
+        
+        if warehouse_id:
+            query = query.filter(StockMovement.warehouse_id == warehouse_id)
+        
+        rows = query.group_by(month_expr).order_by(month_expr).all()
+        
+        row_map = {
+            (row.month.year, row.month.month): (row.in_qty or 0, row.out_qty or 0)
+            for row in rows
+        }
+        
+        date_labels = []
+        in_data = []
+        out_data = []
+        
+        for offset in range(11, -1, -1):
+            year, month = month_delta(today.year, today.month, -offset)
+            label = f"{month:02d}/{year}"
+            in_qty, out_qty = row_map.get((year, month), (0, 0))
+            date_labels.append(label)
+            in_data.append(in_qty)
+            out_data.append(out_qty)
+    
+    return JSONResponse({
+        "labels": date_labels,
+        "in_data": in_data,
+        "out_data": out_data,
+    })
+
+
 @router.get("/logout", response_class=RedirectResponse)
 def logout():
     """Logout user by clearing session cookie."""
-    response = RedirectResponse(url="/login", status_code=302)
+    response = RedirectResponse(url="/ui/login", status_code=302)
     response.delete_cookie("access_token")
     return response
 
@@ -842,18 +951,18 @@ def products_page(request: Request, db: Session = Depends(get_session)):
     """Render products page."""
     token = request.cookies.get("access_token")
     if not token:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     username = decode_access_token(token)
     if not username:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     if not (user.role and user.has_permission("read_product")):
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url="/ui/dashboard", status_code=302)
 
     stats = ProductStats(db)
     all_products = stats.get_all_products_with_stock()
@@ -884,18 +993,18 @@ def products_search(request: Request, q: str = Query(""), db: Session = Depends(
     """Search products by name."""
     token = request.cookies.get("access_token")
     if not token:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     username = decode_access_token(token)
     if not username:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/ui/login", status_code=302)
 
     if not (user.role and user.has_permission("read_product")):
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url="/ui/dashboard", status_code=302)
 
     stats = ProductStats(db)
     search_results = stats.search_products(q) if q else []
@@ -908,5 +1017,41 @@ def products_search(request: Request, q: str = Query(""), db: Session = Depends(
             "products": search_results,
             "search_query": q,
             "can_write_product": user.role and user.has_permission("write_product"),
+        },
+    )
+
+
+@router.get("/users", response_class=HTMLResponse)
+def users_page(request: Request, db: Session = Depends(get_session)):
+    """Render users management page (requires manage_users permission)."""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/ui/login", status_code=302)
+
+    username = decode_access_token(token)
+    if not username:
+        return RedirectResponse(url="/ui/login", status_code=302)
+
+    user = db.query(User).filter(User.username == username, User.is_active == True).first()
+    if not user:
+        return RedirectResponse(url="/ui/login", status_code=302)
+
+    if not (user.role and user.has_permission("manage_users")):
+        return RedirectResponse(url="/ui/dashboard", status_code=302)
+
+    users = db.query(User).all()
+    roles = db.query(Role).all()
+
+    return render_template(
+        request,
+        "users.html",
+        {
+            "user": user,
+            "users": users,
+            "roles": roles,
+            "current_date": date.today().strftime("%d/%m/%Y"),
+            "can_read_product": user.role and user.has_permission("read_product"),
+            "can_manage_users": user.role and user.has_permission("manage_users"),
+            "can_manage_stock": user.role and user.has_permission("manage_stock"),
         },
     )

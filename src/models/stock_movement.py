@@ -33,26 +33,18 @@ class StockMovement(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
 
-    product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id")
-    )
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
 
-    warehouse_id: Mapped[int] = mapped_column(
-        ForeignKey("warehouses.id")
-    )
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id"))
     
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
     quantity: Mapped[int] = mapped_column()
     price: Mapped[float] = mapped_column()
 
-    type: Mapped[MovementType] = mapped_column(
-        SqlEnum(MovementType)
-    )
+    type: Mapped[MovementType] = mapped_column(SqlEnum(MovementType))
 
-    source_module: Mapped[SourceModule] = mapped_column(
-        SqlEnum(SourceModule)
-    )
+    source_module: Mapped[SourceModule] = mapped_column(SqlEnum(SourceModule))
 
     reason: Mapped[str] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default_factory=datetime.utcnow)
